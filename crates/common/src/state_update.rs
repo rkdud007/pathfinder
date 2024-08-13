@@ -3,17 +3,8 @@ use std::collections::{HashMap, HashSet};
 use fake::Dummy;
 
 use crate::{
-    BlockHash,
-    CasmHash,
-    ClassHash,
-    ContractAddress,
-    ContractNonce,
-    SierraHash,
-    StarknetVersion,
-    StateCommitment,
-    StateDiffCommitment,
-    StorageAddress,
-    StorageValue,
+    BlockHash, CasmHash, ClassHash, ContractAddress, ContractNonce, SierraHash, StarknetVersion,
+    StateCommitment, StateDiffCommitment, StorageAddress, StorageValue,
 };
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -347,16 +338,8 @@ mod state_diff_commitment {
 
     use super::{ContractUpdate, SystemContractUpdate};
     use crate::{
-        felt_bytes,
-        CasmHash,
-        ClassHash,
-        ContractAddress,
-        ContractNonce,
-        SierraHash,
-        StarknetVersion,
-        StateDiffCommitment,
-        StorageAddress,
-        StorageValue,
+        felt_bytes, CasmHash, ClassHash, ContractAddress, ContractNonce, SierraHash,
+        StarknetVersion, StateDiffCommitment, StorageAddress, StorageValue,
     };
 
     /// Compute the state diff commitment used in block commitment signatures.
@@ -390,6 +373,7 @@ mod state_diff_commitment {
             )
         } else {
             let mut hasher = PoseidonHasher::new();
+            let mut temp_preimage = Vec::new();
             hasher.write(felt_bytes!(b"STARKNET_STATE_DIFF0").into());
             // Hash the deployed contracts.
             let deployed_contracts: BTreeMap<_, _> = contract_updates
@@ -405,6 +389,8 @@ mod state_diff_commitment {
             for (address, class_hash) in deployed_contracts {
                 hasher.write(MontFelt::from(address.0));
                 hasher.write(MontFelt::from(class_hash.0));
+                temp_preimage.push(MontFelt::from(address.0));
+                temp_preimage.push(MontFelt::from(class_hash.0));
             }
             // Hash the declared classes.
             let declared_classes: BTreeSet<_> = declared_sierra_classes
@@ -415,16 +401,22 @@ mod state_diff_commitment {
             for (sierra, casm) in declared_classes {
                 hasher.write(MontFelt::from(sierra.0));
                 hasher.write(MontFelt::from(casm.0));
+                temp_preimage.push(MontFelt::from(sierra.0));
+                temp_preimage.push(MontFelt::from(casm.0));
             }
             // Hash the old declared classes.
             let deprecated_declared_classes: BTreeSet<_> =
                 declared_cairo_classes.iter().copied().collect();
             hasher.write(MontFelt::from(deprecated_declared_classes.len() as u64));
+            temp_preimage.push(MontFelt::from(deprecated_declared_classes.len() as u64));
             for class_hash in deprecated_declared_classes {
                 hasher.write(MontFelt::from(class_hash.0));
+                temp_preimage.push(MontFelt::from(class_hash.0));
             }
             hasher.write(MontFelt::ONE);
+            temp_preimage.push(MontFelt::ONE);
             hasher.write(MontFelt::ZERO);
+            temp_preimage.push(MontFelt::ZERO);
             // Hash the storage diffs.
             let storage_diffs: BTreeMap<_, _> = contract_updates
                 .iter()
@@ -448,9 +440,13 @@ mod state_diff_commitment {
             for (address, updates) in storage_diffs {
                 hasher.write(MontFelt::from(address.0));
                 hasher.write(MontFelt::from(updates.len() as u64));
+                temp_preimage.push(MontFelt::from(address.0));
+                temp_preimage.push(MontFelt::from(updates.len() as u64));
                 for (key, value) in updates {
                     hasher.write(MontFelt::from(key.0));
                     hasher.write(MontFelt::from(value.0));
+                    temp_preimage.push(MontFelt::from(key.0));
+                    temp_preimage.push(MontFelt::from(value.0));
                 }
             }
             // Hash the nonce updates.
@@ -459,10 +455,14 @@ mod state_diff_commitment {
                 .filter_map(|(address, update)| update.nonce.map(|nonce| (*address, nonce)))
                 .collect();
             hasher.write(MontFelt::from(nonces.len() as u64));
+            temp_preimage.push(MontFelt::from(nonces.len() as u64));
             for (address, nonce) in nonces {
                 hasher.write(MontFelt::from(address.0));
                 hasher.write(MontFelt::from(nonce.0));
+                temp_preimage.push(MontFelt::from(address.0));
+                temp_preimage.push(MontFelt::from(nonce.0));
             }
+            println!("temp:{:?}", temp_preimage);
             StateDiffCommitment(hasher.finish().into())
         }
     }
