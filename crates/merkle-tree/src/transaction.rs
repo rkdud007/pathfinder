@@ -1,9 +1,16 @@
-use bitvec::view::BitView;
-use pathfinder_common::hash::FeltHash;
+use bitvec::{order::Msb0, slice::BitSlice, view::BitView};
+use pathfinder_common::{
+    hash::{FeltHash, PedersenHash},
+    trie::TrieNode,
+};
 use pathfinder_crypto::Felt;
 use pathfinder_storage::StoredNode;
 
-use crate::tree::MerkleTree;
+use crate::{
+    merkle_node::{Direction, InternalNode},
+    storage::Storage,
+    tree::MerkleTree,
+};
 
 /// A [Patricia Merkle tree](MerkleTree) which can be used to calculate
 /// transaction or event commitments.
@@ -24,6 +31,12 @@ impl<H: FeltHash> Default for TransactionOrEventTree<H> {
             tree: MerkleTree::empty(),
         }
     }
+}
+
+#[derive(Debug)]
+pub enum Membership {
+    Member,
+    NonMember,
 }
 
 /// [Storage](crate::storage::Storage) type which always returns [None].
@@ -57,6 +70,56 @@ impl<H: FeltHash> TransactionOrEventTree<H> {
             .commit(&NullStorage {})
             .map(|update| update.root_commitment)
     }
+
+    pub fn get_proof(&self, root: Felt, key: Felt) -> anyhow::Result<Option<Vec<TrieNode>>> {
+        let key = key.to_be_bytes().view_bits().to_owned();
+        let root = u64::from_str_radix(&root.to_hex_str(), 16).unwrap();
+        MerkleTree::<H, 64>::get_proof(root, &NullStorage {}, &key)
+    }
+
+    pub fn verify_proof(
+        &self,
+        root: Felt,
+        key: Felt,
+        value: Felt,
+        proofs: &[TrieNode],
+    ) -> Option<Membership> {
+        let mut expected_hash = root;
+        let mut remaining_path: &BitSlice<u8, Msb0> = key.as_be_bytes().view_bits();
+
+        for proof_node in proofs.iter() {
+            if proof_node.hash::<PedersenHash>() != expected_hash {
+                return None;
+            }
+            match proof_node {
+                TrieNode::Binary { left, right } => {
+                    let direction = Direction::from(remaining_path[0]);
+                    expected_hash = match direction {
+                        Direction::Left => *left,
+                        Direction::Right => *right,
+                    };
+                    remaining_path = &remaining_path[1..];
+                }
+                TrieNode::Edge { child, path } => {
+                    if path != &remaining_path[..path.len()] {
+                        return Some(Membership::NonMember);
+                    }
+
+                    expected_hash = *child;
+
+                    remaining_path = &remaining_path[path.len()..];
+                }
+            }
+        }
+
+        assert!(remaining_path.is_empty(), "Proof path should be empty");
+
+        if expected_hash == value {
+            Some(Membership::Member)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -81,6 +144,11 @@ mod tests {
         // ffc=ffc))))`
         let expected_root_hash =
             felt!("0x1a0e579b6b444769e4626331230b5ae39bd880f47e703b73fa56bf77e52e461");
+
+        let key = Felt::from_u64(1);
+        let proof = tree.get_proof(expected_root_hash, key).unwrap().unwrap();
+        let mem = tree.verify_proof(expected_root_hash, key, key, &proof);
+        println!("{:?}", mem);
         let computed_root_hash = tree.commit().unwrap();
 
         assert_eq!(expected_root_hash, computed_root_hash);

@@ -69,7 +69,7 @@ use crate::storage::Storage;
 /// A Starknet binary Merkle-Patricia tree.
 #[derive(Debug, Clone)]
 pub struct MerkleTree<H: FeltHash, const HEIGHT: usize> {
-    root: Option<Rc<RefCell<InternalNode>>>,
+    pub root: Option<Rc<RefCell<InternalNode>>>,
     leaves: HashMap<BitVec<u8, Msb0>, Felt>,
     nodes_removed: Vec<u64>,
     _hasher: std::marker::PhantomData<H>,
@@ -1525,11 +1525,7 @@ mod tests {
 
     mod real_world {
         use pathfinder_common::{
-            class_commitment,
-            class_commitment_leaf_hash,
-            felt,
-            sierra_hash,
-            BlockNumber,
+            class_commitment, class_commitment_leaf_hash, felt, sierra_hash, BlockNumber,
             ClassCommitmentLeafHash,
         };
         use pathfinder_storage::RootIndexUpdate;
@@ -2003,7 +1999,7 @@ mod tests {
         ///    4. set expected_hash <- to the child hash
         /// 3. check that the expected_hash is `value` (we should've reached the
         ///    leaf)
-        fn verify_proof(
+        pub fn verify_proof(
             root: Felt,
             key: &BitSlice<u8, Msb0>,
             value: Felt,
