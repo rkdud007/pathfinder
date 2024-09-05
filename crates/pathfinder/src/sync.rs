@@ -17,6 +17,7 @@ use pathfinder_common::{
     StarknetVersion,
 };
 use pathfinder_ethereum::EthereumStateUpdate;
+use pathfinder_storage::Transaction;
 use primitive_types::H160;
 use starknet_gateway_client::{Client as GatewayClient, GatewayApi};
 use stream::ProcessStage;
@@ -29,6 +30,7 @@ mod error;
 mod events;
 mod headers;
 mod state_updates;
+mod storage_adapters;
 mod stream;
 mod track;
 mod transactions;
@@ -78,8 +80,6 @@ impl Sync {
     /// sync and its parent hash.
     async fn checkpoint_sync(&self) -> anyhow::Result<(BlockNumber, BlockHash)> {
         let mut checkpoint = self.get_checkpoint().await?;
-
-        tracing::error!(?checkpoint, ">>>> CHECKPOINT");
 
         loop {
             let result = checkpoint::Sync {
@@ -133,40 +133,6 @@ impl Sync {
         tracing::info!("Track sync completed: {result:#?}");
 
         Ok(())
-    }
-}
-
-/// The starknet version is necessary to calculate some of the hashes and
-/// commitments.
-pub struct FetchStarknetVersionFromDb<T> {
-    db: pathfinder_storage::Connection,
-    _marker: std::marker::PhantomData<T>,
-}
-
-impl<T> FetchStarknetVersionFromDb<T> {
-    pub fn new(db: pathfinder_storage::Connection) -> Self {
-        Self {
-            db,
-            _marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<T> ProcessStage for FetchStarknetVersionFromDb<T> {
-    const NAME: &'static str = "Transactions::FetchStarknetVersionFromDb";
-    type Input = (T, BlockNumber);
-    type Output = (T, StarknetVersion);
-
-    fn map(&mut self, (data, block_number): Self::Input) -> Result<Self::Output, SyncError2> {
-        let mut db = self
-            .db
-            .transaction()
-            .context("Creating database transaction")?;
-        let version = db
-            .block_version(block_number)
-            .context("Fetching starknet version")?
-            .ok_or(SyncError2::StarknetVersionNotFound)?;
-        Ok((data, version))
     }
 }
 

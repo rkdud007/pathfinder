@@ -174,7 +174,12 @@ Hint: This is usually caused by exceeding the file descriptor limit of your syst
     });
     let execution_storage = storage_manager
         .create_read_only_pool(execution_storage_pool_size)
-        .context(r"")?;
+        .context(
+            r"Creating database connection pool for execution
+
+Hint: This is usually caused by exceeding the file descriptor limit of your system.
+      Try increasing the file limit to using `ulimit` or similar tooling.",
+        )?;
 
     let p2p_storage = storage_manager
         .create_pool(NonZeroU32::new(1).unwrap())
@@ -233,8 +238,6 @@ Hint: This is usually caused by exceeding the file descriptor limit of your syst
     };
 
     let default_version = match config.rpc_root_version {
-        config::RpcVersion::V04 => pathfinder_rpc::RpcVersion::V04,
-        config::RpcVersion::V05 => pathfinder_rpc::RpcVersion::V05,
         config::RpcVersion::V06 => pathfinder_rpc::RpcVersion::V06,
         config::RpcVersion::V07 => pathfinder_rpc::RpcVersion::V07,
     };
@@ -583,6 +586,7 @@ fn start_feeder_gateway_sync(
         verify_tree_hashes: config.verify_tree_hashes,
         gossiper,
         sequencer_public_key: gateway_public_key,
+        fetch_concurrency: config.feeder_gateway_fetch_concurrency,
     };
 
     tokio::spawn(state::sync(sync_context, state::l1::sync, state::l2::sync))

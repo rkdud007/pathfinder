@@ -15,12 +15,7 @@ use p2p::client::peer_agnostic::traits::{
     TransactionStream,
 };
 use p2p::client::peer_agnostic::Client as P2PClient;
-use p2p::client::types::{
-    ClassDefinition,
-    EventsForBlockByTransaction,
-    UnverifiedStateUpdateData,
-    UnverifiedTransactionData,
-};
+use p2p::client::types::{ClassDefinition, EventsForBlockByTransaction, TransactionData};
 use p2p::PeerData;
 use p2p_proto::common::{BlockNumberOrHash, Direction, Iteration};
 use p2p_proto::transaction::{TransactionWithReceipt, TransactionsRequest, TransactionsResponse};
@@ -46,11 +41,14 @@ use tokio::sync::Mutex;
 use tokio::task::spawn_blocking;
 use tracing::Instrument;
 
-use super::FetchStarknetVersionFromDb;
+use super::error::SyncError2;
 use crate::state::block_hash::calculate_transaction_commitment;
 use crate::sync::error::SyncError;
 use crate::sync::stream::{InfallibleSource, Source, SyncReceiver, SyncResult};
 use crate::sync::{class_definitions, events, headers, state_updates, transactions};
+
+#[cfg(test)]
+mod fixture;
 
 /// Provides P2P sync capability for blocks secured by L1.
 #[derive(Clone)]
@@ -182,7 +180,7 @@ impl Sync {
         let transaction_stream = self.p2p.clone().transaction_stream(
             start,
             stop,
-            transactions::counts_and_commitments_stream(
+            transactions::counts_stream(
                 self.storage.clone(),
                 start,
                 stop,
@@ -212,7 +210,7 @@ impl Sync {
         let stream = self.p2p.clone().state_diff_stream(
             start,
             stop,
-            state_updates::length_and_commitment_stream(
+            state_updates::state_diff_length_stream(
                 self.storage.clone(),
                 start,
                 stop,
@@ -314,19 +312,25 @@ async fn handle_header_stream(
 }
 
 async fn handle_transaction_stream(
-    stream: impl Stream<Item = StreamItem<(UnverifiedTransactionData, BlockNumber)>> + Send + 'static,
+    stream: impl Stream<Item = StreamItem<(TransactionData, BlockNumber)>> + Send + 'static,
     storage: Storage,
     chain_id: ChainId,
     start: BlockNumber,
 ) -> Result<(), SyncError> {
     Source::from_stream(stream.map_err(|e| e.map(Into::into)))
         .spawn()
-        .pipe(FetchStarknetVersionFromDb::new(storage.connection()?), 10)
+        .pipe(
+            transactions::FetchCommitmentFromDb::new(storage.connection()?),
+            10,
+        )
         .pipe(transactions::CalculateHashes(chain_id), 10)
         .pipe(transactions::VerifyCommitment, 10)
         .pipe(transactions::Store::new(storage.connection()?, start), 10)
         .into_stream()
-        .inspect_ok(|x| tracing::info!(tail=%x.data, "Transactions chunk synced"))
+        .inspect_ok(|x| {
+            tracing::info!(tail=%x.data, "Transactions chunk
+    synced")
+        })
         .try_fold((), |_, _| std::future::ready(Ok(())))
         .await
         .map_err(SyncError::from_v2)?;
@@ -334,14 +338,17 @@ async fn handle_transaction_stream(
 }
 
 async fn handle_state_diff_stream(
-    stream: impl Stream<Item = StreamItem<(UnverifiedStateUpdateData, BlockNumber)>> + Send + 'static,
+    stream: impl Stream<Item = StreamItem<(StateUpdateData, BlockNumber)>> + Send + 'static,
     storage: Storage,
     start: BlockNumber,
     verify_tree_hashes: bool,
 ) -> Result<(), SyncError> {
     Source::from_stream(stream.map_err(|e| e.map(Into::into)))
         .spawn()
-        .pipe(FetchStarknetVersionFromDb::new(storage.connection()?), 10)
+        .pipe(
+            state_updates::FetchCommitmentFromDb::new(storage.connection()?),
+            10,
+        )
         .pipe(state_updates::VerifyCommitment, 10)
         .pipe(
             state_updates::UpdateStarknetState {
@@ -930,10 +937,7 @@ mod tests {
         use assert_matches::assert_matches;
         use fake::{Dummy, Faker};
         use futures::stream;
-        use p2p::client::types::{
-            UnverifiedTransactionData,
-            UnverifiedTransactionDataWithBlockNumber,
-        };
+        use p2p::client::types::TransactionData;
         use p2p::libp2p::PeerId;
         use pathfinder_common::receipt::Receipt;
         use pathfinder_common::transaction::TransactionVariant;
@@ -946,9 +950,7 @@ mod tests {
         use super::*;
 
         struct Setup {
-            pub streamed_transactions: Vec<
-                Result<PeerData<UnverifiedTransactionDataWithBlockNumber>, PeerData<anyhow::Error>>,
-            >,
+            pub streamed_transactions: Vec<StreamItem<(TransactionData, BlockNumber)>>,
             pub expected_transactions: Vec<Vec<(Transaction, Receipt)>>,
             pub storage: Storage,
         }
@@ -972,14 +974,11 @@ mod tests {
                         block.header.header.transaction_commitment = transaction_commitment;
 
                         anyhow::Result::Ok(PeerData::for_tests((
-                            UnverifiedTransactionData {
-                                expected_commitment: transaction_commitment,
-                                transactions: block
-                                    .transaction_data
-                                    .iter()
-                                    .map(|x| (x.0.variant.clone(), x.1.clone().into()))
-                                    .collect::<Vec<_>>(),
-                            },
+                            block
+                                .transaction_data
+                                .iter()
+                                .map(|x| (x.0.variant.clone(), x.1.clone().into()))
+                                .collect::<Vec<_>>(),
                             block.header.header.number,
                         )))
                     })
@@ -1113,7 +1112,6 @@ mod tests {
         use assert_matches::assert_matches;
         use fake::{Dummy, Fake, Faker};
         use futures::stream;
-        use p2p::client::types::UnverifiedStateUpdateWithBlockNumber;
         use p2p::libp2p::PeerId;
         use pathfinder_common::state_update::{ContractClassUpdate, StateUpdateData};
         use pathfinder_common::transaction::DeployTransactionV0;
@@ -1126,32 +1124,29 @@ mod tests {
         use super::*;
 
         struct Setup {
-            pub streamed_state_diffs: Vec<
-                Result<PeerData<UnverifiedStateUpdateWithBlockNumber>, PeerData<anyhow::Error>>,
-            >,
+            pub streamed_state_diffs: Vec<StreamItem<(StateUpdateData, BlockNumber)>>,
             pub expected_state_diffs: Vec<StateUpdateData>,
             pub storage: Storage,
         }
 
         async fn setup(num_blocks: usize) -> Setup {
             tokio::task::spawn_blocking(move || {
-                let mut blocks = fake_storage::init::with_n_blocks(num_blocks);
+                let mut blocks = super::fixture::blocks()[..num_blocks].to_vec();
                 let streamed_state_diffs = blocks
                     .iter()
                     .map(|block| {
                         Result::<PeerData<_>, PeerData<_>>::Ok(PeerData::for_tests((
-                            UnverifiedStateUpdateData {
-                                expected_commitment: block.header.header.state_diff_commitment,
-                                state_diff: block.state_update.clone().into(),
-                            },
+                            block.state_update.clone().into(),
                             block.header.header.number,
                         )))
                     })
                     .collect::<Vec<_>>();
+                let mut implicit_declarations = HashSet::new();
                 let expected_state_diffs = blocks
                     .iter()
                     .map(|block| {
-                        // Cairo0 Deploy should also count as implicit declaration
+                        // Cairo0 Deploy should also count as implicit declaration the first time
+                        // it happens
                         let mut state_diff: StateUpdateData = block.state_update.clone().into();
                         block
                             .state_update
@@ -1160,19 +1155,16 @@ mod tests {
                             .for_each(|(_, v)| {
                                 v.class.as_ref().inspect(|class_update| {
                                     if let ContractClassUpdate::Deploy(class_hash) = class_update {
-                                        state_diff.declared_cairo_classes.insert(*class_hash);
+                                        if !implicit_declarations.contains(class_hash) {
+                                            state_diff.declared_cairo_classes.insert(*class_hash);
+                                            implicit_declarations.insert(*class_hash);
+                                        }
                                     }
                                 });
                             });
                         state_diff
                     })
                     .collect::<Vec<_>>();
-                blocks.iter_mut().for_each(|block| {
-                    // Purge state diff data and class definitions.
-                    block.state_update = Default::default();
-                    block.sierra_defs = Default::default();
-                    block.cairo_defs = Default::default();
-                });
 
                 let storage = StorageBuilder::in_memory().unwrap();
                 fake_storage::fill(&storage, &blocks);
@@ -1188,7 +1180,7 @@ mod tests {
 
         #[tokio::test]
         async fn happy_path() {
-            const NUM_BLOCKS: usize = 10;
+            const NUM_BLOCKS: usize = 2;
             let Setup {
                 streamed_state_diffs,
                 expected_state_diffs,
@@ -1235,7 +1227,6 @@ mod tests {
                 .unwrap()
                 .data
                 .0
-                .state_diff
                 .declared_cairo_classes
                 .insert(Faker.fake());
 
