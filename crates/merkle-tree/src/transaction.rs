@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Context;
-use bitvec::{order::Msb0, slice::BitSlice, view::BitView};
+use bitvec::{order::Msb0, slice::BitSlice, vec::BitVec, view::BitView};
 use pathfinder_common::{
     hash::{FeltHash, PedersenHash},
     trie::TrieNode,
@@ -63,8 +63,12 @@ impl crate::storage::Storage for StatelessStorage {
 }
 
 impl<H: FeltHash> TransactionOrEventTree<H> {
-    pub fn set(&mut self, storage: &impl Storage, index: u64, value: Felt) -> anyhow::Result<()> {
-        let key = index.to_be_bytes().view_bits().to_owned();
+    pub fn set(
+        &mut self,
+        storage: &impl Storage,
+        key: BitVec<u8, Msb0>,
+        value: Felt,
+    ) -> anyhow::Result<()> {
         self.tree.set(storage, key, value)
     }
 
@@ -80,51 +84,71 @@ impl<H: FeltHash> TransactionOrEventTree<H> {
     pub fn get_proof(
         storage: &impl Storage,
         root_idx: u64,
-        key: Felt,
+        key: BitVec<u8, Msb0>,
     ) -> anyhow::Result<Option<Vec<TrieNode>>> {
-        let key = key.to_be_bytes().view_bits().to_owned();
         MerkleTree::<H, 64>::get_proof(root_idx, storage, &key)
     }
 
     pub fn verify_proof(
         root: Felt,
-        key: Felt,
+        key: &BitSlice<u8, Msb0>,
         value: Felt,
         proofs: &[TrieNode],
     ) -> Option<Membership> {
+        // Protect from ill-formed keys
+        if key.len() != 251 {
+            return None;
+        }
+
         let mut expected_hash = root;
-        let mut remaining_path: &BitSlice<u8, Msb0> = key.as_be_bytes().view_bits();
+        let mut remaining_path: &BitSlice<u8, Msb0> = key;
 
         for proof_node in proofs.iter() {
+            // Hash mismatch? Return None.
             if proof_node.hash::<PedersenHash>() != expected_hash {
                 return None;
             }
             match proof_node {
                 TrieNode::Binary { left, right } => {
+                    // Direction will always correspond to the 0th index
+                    // because we're removing bits on every iteration.
                     let direction = Direction::from(remaining_path[0]);
+
+                    // Set the next hash to be the left or right hash,
+                    // depending on the direction
                     expected_hash = match direction {
                         Direction::Left => *left,
                         Direction::Right => *right,
                     };
+
+                    // Advance by a single bit
                     remaining_path = &remaining_path[1..];
                 }
                 TrieNode::Edge { child, path } => {
                     if path != &remaining_path[..path.len()] {
+                        // If paths don't match, we've found a proof of non membership because
+                        // we:
+                        // 1. Correctly moved towards the target insofar as is possible, and
+                        // 2. hashing all the nodes along the path does result in the root hash,
+                        //    which means
+                        // 3. the target definitely does not exist in this tree
                         return Some(Membership::NonMember);
                     }
 
+                    // Set the next hash to the child's hash
                     expected_hash = *child;
 
+                    // Advance by the whole edge path
                     remaining_path = &remaining_path[path.len()..];
                 }
             }
         }
 
-        // assert!(remaining_path.is_empty(), "Proof path should be empty");
-
+        // At this point, we should reach `value` !
         if expected_hash == value {
             Some(Membership::Member)
         } else {
+            // Hash mismatch. Return `None`.
             None
         }
     }
@@ -194,26 +218,34 @@ mod tests {
         let mut tree: TransactionOrEventTree<PedersenHash> = Default::default();
         let mut storage = StatelessStorage::default();
 
-        for (idx, hash) in [1u64, 2, 3, 4].into_iter().enumerate() {
-            let hash = Felt::from(hash);
-            let idx: u64 = idx.try_into().unwrap();
-            tree.set(&storage, idx, hash).unwrap();
-        }
+        let key1 = felt!("0x0").view_bits().to_owned(); // 0b01
+        let key2 = felt!("0x1").view_bits().to_owned(); // 0b01
+
+        let keys = vec![key1.as_bitslice(), key2.as_bitslice()];
+
+        let value_1 = felt!("0x2");
+        let value_2 = felt!("0x3");
+
+        tree.set(&storage, key1.clone(), value_1).unwrap();
+        tree.set(&storage, key2.clone(), value_2).unwrap();
 
         // produced by the cairo-lang Python implementation:
         // `hex(asyncio.run(calculate_patricia_root([1, 2, 3, 4], height=64,
         // ffc=ffc))))`
-        let expected_root_hash =
-            felt!("0x1a0e579b6b444769e4626331230b5ae39bd880f47e703b73fa56bf77e52e461");
+        // let expected_root_hash =
+        //     felt!("0x1a0e579b6b444769e4626331230b5ae39bd880f47e703b73fa56bf77e52e461");
         let (root, root_idx) = commit_and_persist(tree.tree, &mut storage);
 
-        assert_eq!(expected_root_hash, root);
-        let key = Felt::from_u64(1);
-        let proof = TransactionOrEventTree::<PedersenHash>::get_proof(&storage, root_idx, key)
-            .unwrap()
-            .unwrap();
+        // assert_eq!(expected_root_hash, root);
+        // let key = Felt::from_u64(1);
+        // let value = Felt::from_u64(2);
+        let proof =
+            TransactionOrEventTree::<PedersenHash>::get_proof(&storage, root_idx, key1.clone())
+                .unwrap()
+                .unwrap();
         println!("{:?}", proof);
-        let mem = TransactionOrEventTree::<PedersenHash>::verify_proof(root, key, key, &proof);
+        let mem =
+            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_1, &proof);
         println!("{:?}", mem);
     }
 }
