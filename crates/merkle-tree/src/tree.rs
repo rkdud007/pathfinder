@@ -107,7 +107,7 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
 
     /// Commits all tree mutations and returns the [changes](TrieUpdate) to the
     /// tree.
-    pub fn commit(self, storage: &impl Storage) -> anyhow::Result<TrieUpdate> {
+    pub fn commit(&self, storage: &impl Storage) -> anyhow::Result<TrieUpdate> {
         // Go through tree, collect mutated nodes and calculate their hashes.
         let mut added = Vec::new();
         let mut removed = Vec::new();
@@ -136,7 +136,7 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
             Felt::ZERO
         };
 
-        removed.extend(self.nodes_removed);
+        removed.extend(self.nodes_removed.clone());
 
         Ok(TrieUpdate {
             nodes_added: added,
@@ -2102,7 +2102,7 @@ mod tests {
 
             /// Calls `get_proof` and `verify_proof` on every key/value pair in
             /// the random_tree.
-            fn verify(&mut self) {
+            pub fn verify(&mut self) {
                 let keys_bits: Vec<&BitSlice<u8, Msb0>> =
                     self.keys.iter().map(|k| k.view_bits()).collect();
                 let proofs = get_proofs(&keys_bits, self.root_idx, &self.storage).unwrap();

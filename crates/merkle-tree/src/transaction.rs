@@ -6,11 +6,7 @@ use pathfinder_common::{
 use pathfinder_crypto::Felt;
 use pathfinder_storage::StoredNode;
 
-use crate::{
-    merkle_node::{Direction, InternalNode},
-    storage::Storage,
-    tree::MerkleTree,
-};
+use crate::{merkle_node::Direction, tree::MerkleTree};
 
 /// A [Patricia Merkle tree](MerkleTree) which can be used to calculate
 /// transaction or event commitments.
@@ -65,16 +61,15 @@ impl<H: FeltHash> TransactionOrEventTree<H> {
         self.tree.set(&NullStorage {}, key, value)
     }
 
-    pub fn commit(self) -> anyhow::Result<Felt> {
+    pub fn commit(&self) -> anyhow::Result<Felt> {
         self.tree
             .commit(&NullStorage {})
             .map(|update| update.root_commitment)
     }
 
-    pub fn get_proof(&self, root: Felt, key: Felt) -> anyhow::Result<Option<Vec<TrieNode>>> {
+    pub fn get_proof(&self, root_idx: u64, key: Felt) -> anyhow::Result<Option<Vec<TrieNode>>> {
         let key = key.to_be_bytes().view_bits().to_owned();
-        let root = u64::from_str_radix(&root.to_hex_str(), 16).unwrap();
-        MerkleTree::<H, 64>::get_proof(root, &NullStorage {}, &key)
+        MerkleTree::<H, 64>::get_proof(root_idx, &NullStorage {}, &key)
     }
 
     pub fn verify_proof(
@@ -145,10 +140,11 @@ mod tests {
         let expected_root_hash =
             felt!("0x1a0e579b6b444769e4626331230b5ae39bd880f47e703b73fa56bf77e52e461");
 
-        let key = Felt::from_u64(1);
-        let proof = tree.get_proof(expected_root_hash, key).unwrap().unwrap();
-        let mem = tree.verify_proof(expected_root_hash, key, key, &proof);
-        println!("{:?}", mem);
+        // let key = Felt::from_u64(4);
+        // let proof = tree.get_proof(1, key).unwrap().unwrap();
+        // println!("{:?}", proof);
+        // let mem = tree.verify_proof(key, key, key, &proof);
+        // println!("{:?}", mem);
         let computed_root_hash = tree.commit().unwrap();
 
         assert_eq!(expected_root_hash, computed_root_hash);
