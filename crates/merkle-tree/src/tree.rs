@@ -70,7 +70,7 @@ use crate::storage::Storage;
 #[derive(Debug, Clone)]
 pub struct MerkleTree<H: FeltHash, const HEIGHT: usize> {
     pub root: Option<Rc<RefCell<InternalNode>>>,
-    leaves: HashMap<BitVec<u8, Msb0>, Felt>,
+    pub leaves: HashMap<BitVec<u8, Msb0>, Felt>,
     nodes_removed: Vec<u64>,
     _hasher: std::marker::PhantomData<H>,
     /// If enables, node hashes are verified as they are resolved. This allows
@@ -2151,10 +2151,18 @@ mod tests {
             uut.set(&storage, key1.clone(), value_1).unwrap();
             uut.set(&storage, key2.clone(), value_2).unwrap();
             let (root, root_idx) = commit_and_persist_with_pruning(uut, &mut storage);
+            println!("root: {:?}", root);
+            println!("root_idx: {:?}", root_idx);
 
-            let proofs = get_proofs(&keys, root_idx, &storage).unwrap();
+            let proofs = get_proofs(&keys, 1, &storage).unwrap();
 
-            let verified_key1 = verify_proof(root, &key1, value_1, &proofs[0]).unwrap();
+            let verified_key1 = verify_proof(
+                felt!("0x079ACDB7A3D78052114E21458E8C4AECB9D781CE79308193C61A2F3F84439F66"),
+                &key1,
+                value_1,
+                &proofs[0],
+            )
+            .unwrap();
 
             assert_eq!(verified_key1, Membership::Member);
         }
