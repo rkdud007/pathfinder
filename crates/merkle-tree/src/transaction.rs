@@ -22,12 +22,14 @@ use crate::{merkle_node::Direction, storage::Storage, tree::MerkleTree};
 /// More information about these commitments can be found in the Starknet [documentation](https://docs.starknet.io/documentation/architecture_and_concepts/Blocks/header/).
 pub struct TransactionOrEventTree<H: FeltHash> {
     pub tree: MerkleTree<H, 64>,
+    pub storage: StatelessStorage,
 }
 
 impl<H: FeltHash> Default for TransactionOrEventTree<H> {
     fn default() -> Self {
         Self {
             tree: MerkleTree::empty(),
+            storage: Default::default(),
         }
     }
 }
@@ -63,30 +65,21 @@ impl crate::storage::Storage for StatelessStorage {
 }
 
 impl<H: FeltHash> TransactionOrEventTree<H> {
-    pub fn set(
-        &mut self,
-        storage: &impl Storage,
-        key: BitVec<u8, Msb0>,
-        value: Felt,
-    ) -> anyhow::Result<()> {
-        self.tree.set(storage, key, value)
+    pub fn set(&mut self, key: BitVec<u8, Msb0>, value: Felt) -> anyhow::Result<()> {
+        self.tree.set(&self.storage, key, value)
     }
 
-    // pub fn commit(&self, storage: &impl Storage) -> anyhow::Result<Felt> {
-    //     for (key, value) in &self.tree.leaves {
-    //         let key = Felt::from_bits(key).unwrap();
-    //         storage.leaves.insert(key, *value);
-    //     }
-
-    //     let update = tree.commit(storage).unwrap();
-    // }
+    pub fn commit(&mut self) -> anyhow::Result<(Felt, u64)> {
+        let update = commit_and_persist(&self.tree, &mut self.storage);
+        Ok(update)
+    }
 
     pub fn get_proof(
-        storage: &impl Storage,
+        &self,
         root_idx: u64,
         key: BitVec<u8, Msb0>,
     ) -> anyhow::Result<Option<Vec<TrieNode>>> {
-        MerkleTree::<H, 64>::get_proof(root_idx, storage, &key)
+        MerkleTree::<H, 64>::get_proof(root_idx, &self.storage, &key)
     }
 
     pub fn verify_proof(
@@ -156,7 +149,7 @@ impl<H: FeltHash> TransactionOrEventTree<H> {
 
 /// Commits the tree changes and persists them to storage.
 fn commit_and_persist<H: FeltHash, const HEIGHT: usize>(
-    tree: MerkleTree<H, HEIGHT>,
+    tree: &MerkleTree<H, HEIGHT>,
     storage: &mut StatelessStorage,
 ) -> (Felt, u64) {
     for (key, value) in &tree.leaves {
@@ -216,7 +209,6 @@ mod tests {
     #[test]
     fn test_commitment_merkle_tree() {
         let mut tree: TransactionOrEventTree<PedersenHash> = Default::default();
-        let mut storage = StatelessStorage::default();
 
         let key1 = felt!("0x0").view_bits().to_owned(); // 0b01
         let key2 = felt!("0x1").view_bits().to_owned(); // 0b01
@@ -234,27 +226,24 @@ mod tests {
         let value_5 = felt!("0x6");
         let value_6 = felt!("0x7");
 
-        tree.set(&storage, key1.clone(), value_1).unwrap();
-        tree.set(&storage, key2.clone(), value_2).unwrap();
-        tree.set(&storage, key3.clone(), value_3).unwrap();
-        tree.set(&storage, key4.clone(), value_4).unwrap();
-        tree.set(&storage, key5.clone(), value_5).unwrap();
-        tree.set(&storage, key6.clone(), value_6).unwrap();
+        tree.set(key1.clone(), value_1).unwrap();
+        tree.set(key2.clone(), value_2).unwrap();
+        tree.set(key3.clone(), value_3).unwrap();
+        tree.set(key4.clone(), value_4).unwrap();
+        tree.set(key5.clone(), value_5).unwrap();
+        tree.set(key6.clone(), value_6).unwrap();
 
         // produced by the cairo-lang Python implementation:
         // `hex(asyncio.run(calculate_patricia_root([1, 2, 3, 4], height=64,
         // ffc=ffc))))`
         // let expected_root_hash =
         //     felt!("0x1a0e579b6b444769e4626331230b5ae39bd880f47e703b73fa56bf77e52e461");
-        let (root, root_idx) = commit_and_persist(tree.tree, &mut storage);
+        let (root, root_idx) = tree.commit().unwrap();
 
         // assert_eq!(expected_root_hash, root);
         // let key = Felt::from_u64(1);
         // let value = Felt::from_u64(2);
-        let proof =
-            TransactionOrEventTree::<PedersenHash>::get_proof(&storage, root_idx, key1.clone())
-                .unwrap()
-                .unwrap();
+        let proof = tree.get_proof(root_idx, key1.clone()).unwrap().unwrap();
         println!("{:?}", proof);
         let mem =
             TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_1, &proof);

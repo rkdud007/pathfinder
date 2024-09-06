@@ -9,4 +9,4 @@ mod transaction;
 
 pub use class::ClassCommitmentTree;
 pub use contract::{ContractsStorageTree, StorageCommitmentTree};
-pub use transaction::TransactionOrEventTree;
+pub use transaction::{StatelessStorage, TransactionOrEventTree};
