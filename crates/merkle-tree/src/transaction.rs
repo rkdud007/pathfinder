@@ -40,7 +40,7 @@ pub enum Membership {
 
 /// [Storage](crate::storage::Storage) type which always returns [None].'
 #[derive(Default, Debug)]
-struct StatelessStorage {
+pub struct StatelessStorage {
     nodes: HashMap<u64, (Felt, StoredNode)>,
     leaves: HashMap<Felt, Felt>,
     next_index: u64,
