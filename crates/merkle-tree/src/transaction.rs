@@ -220,14 +220,26 @@ mod tests {
 
         let key1 = felt!("0x0").view_bits().to_owned(); // 0b01
         let key2 = felt!("0x1").view_bits().to_owned(); // 0b01
+        let key3 = felt!("0x2").view_bits().to_owned(); // 0b01
+        let key4 = felt!("0x3").view_bits().to_owned(); // 0b01
+        let key5 = felt!("0x4").view_bits().to_owned(); // 0b01
+        let key6 = felt!("0x5").view_bits().to_owned(); // 0b01
 
-        let keys = vec![key1.as_bitslice(), key2.as_bitslice()];
+        // let keys = vec![key1.as_bitslice(), key2.as_bitslice()];
 
         let value_1 = felt!("0x2");
         let value_2 = felt!("0x3");
+        let value_3 = felt!("0x4");
+        let value_4 = felt!("0x5");
+        let value_5 = felt!("0x6");
+        let value_6 = felt!("0x7");
 
         tree.set(&storage, key1.clone(), value_1).unwrap();
         tree.set(&storage, key2.clone(), value_2).unwrap();
+        tree.set(&storage, key3.clone(), value_3).unwrap();
+        tree.set(&storage, key4.clone(), value_4).unwrap();
+        tree.set(&storage, key5.clone(), value_5).unwrap();
+        tree.set(&storage, key6.clone(), value_6).unwrap();
 
         // produced by the cairo-lang Python implementation:
         // `hex(asyncio.run(calculate_patricia_root([1, 2, 3, 4], height=64,
@@ -246,6 +258,16 @@ mod tests {
         println!("{:?}", proof);
         let mem =
             TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_1, &proof);
+        println!("{:?}", mem);
+
+        let mem =
+            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_2, &proof);
+        println!("{:?}", mem);
+
+        let key7 = felt!("0xabc").view_bits().to_owned(); // 0b01
+
+        let mem =
+            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key7, value_2, &proof);
         println!("{:?}", mem);
     }
 }
