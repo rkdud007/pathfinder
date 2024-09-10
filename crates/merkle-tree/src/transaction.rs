@@ -252,17 +252,17 @@ mod tests {
         let proof = tree.get_proof(root_idx, key1.clone()).unwrap().unwrap();
         println!("{:?}", proof);
         let mem =
-            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_1, &proof);
+            TransactionOrEventTree::<PoseidonHash>::verify_proof(root, &key1, value_1, &proof);
         println!("{:?}", mem);
 
         let mem =
-            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_2, &proof);
+            TransactionOrEventTree::<PoseidonHash>::verify_proof(root, &key1, value_2, &proof);
         println!("{:?}", mem);
 
         let key7 = felt!("0xabc").view_bits().to_owned(); // 0b01
 
         let mem =
-            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key7, value_2, &proof);
+            TransactionOrEventTree::<PoseidonHash>::verify_proof(root, &key7, value_2, &proof);
         println!("{:?}", mem);
     }
 
@@ -309,17 +309,17 @@ mod tests {
         let proof = tree.get_proof(root_idx, key1.clone()).unwrap().unwrap();
         println!("{:?}", proof);
         let mem =
-            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_1, &proof);
+            TransactionOrEventTree::<PoseidonHash>::verify_proof(root, &key1, value_1, &proof);
         println!("{:?}", mem);
 
         let mem =
-            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_2, &proof);
+            TransactionOrEventTree::<PoseidonHash>::verify_proof(root, &key1, value_2, &proof);
         println!("{:?}", mem);
 
         let key7 = felt!("0xabc").view_bits().to_owned(); // 0b01
 
         let mem =
-            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key7, value_2, &proof);
+            TransactionOrEventTree::<PoseidonHash>::verify_proof(root, &key7, value_2, &proof);
         println!("{:?}", mem);
     }
 
