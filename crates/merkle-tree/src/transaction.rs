@@ -208,6 +208,65 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_commitment_merkle_tree_1() {
+        // tests/test_block_rpc.py Testing block 99709...
+        // protocol_version='0.13.2'
+        // tx_hash_hex='0x3ad5b36aebddd41f7a940f661524b8b1a7f9122ecc32c3787fe1d3d505832b0'
+        // tx_hash_hex='0x60ce1ec3185e1e518f1927d912391c854d0691e8fcc8c7e869f28d4e1bde18f'
+        // tx_hash_hex='0x143ca81e68f9396b25b2fb5b1c6d12f8b21bae293cd6884bc4d0cae2c17d7ad'
+        // tx_hash_hex='0x4b7ea705cf636d247ab13eb690dd31358cf69e75c06f39ba177ac55d18a9661'
+        // tx_hash_hex='0x4ff941e616e9bee6bc6e6aaed4858808c025b33a8b4aa1c6cf532573e6e7bb9'
+        // tx_commit_hex='0x2b03aaba363cb9ae391fd4cfc5f7041f057fc912560f7d84915fa52e8bbe33'
+
+        let mut tree: TransactionOrEventTree<PedersenHash> = Default::default();
+
+        let key1 = 0_u64.to_be_bytes().view_bits().to_owned(); // 0b01
+        let key2 = 1_u64.to_be_bytes().view_bits().to_owned(); // 0b01
+        let key3 = 2_u64.to_be_bytes().view_bits().to_owned(); // 0b01
+        let key4 = 3_u64.to_be_bytes().view_bits().to_owned(); // 0b01
+        let key5 = 4_u64.to_be_bytes().view_bits().to_owned(); // 0b01
+                                                               // let keys = vec![key1.as_bitslice(), key2.as_bitslice()];
+
+        let value_1 = felt!("0x3ad5b36aebddd41f7a940f661524b8b1a7f9122ecc32c3787fe1d3d505832b0");
+        let value_2 = felt!("0x60ce1ec3185e1e518f1927d912391c854d0691e8fcc8c7e869f28d4e1bde18f");
+        let value_3 = felt!("0x143ca81e68f9396b25b2fb5b1c6d12f8b21bae293cd6884bc4d0cae2c17d7ad");
+        let value_4 = felt!("0x4b7ea705cf636d247ab13eb690dd31358cf69e75c06f39ba177ac55d18a9661");
+        let value_5 = felt!("0x4ff941e616e9bee6bc6e6aaed4858808c025b33a8b4aa1c6cf532573e6e7bb9");
+
+        tree.set(key1.clone(), value_1).unwrap();
+        tree.set(key2.clone(), value_2).unwrap();
+        tree.set(key3.clone(), value_3).unwrap();
+        tree.set(key4.clone(), value_4).unwrap();
+        tree.set(key5.clone(), value_5).unwrap();
+
+        let (root, root_idx) = tree.commit().unwrap();
+        // 0x06B67F08773932811D1EA6ACC6D7BF95A33818B95A09D05A15BC61AC859AF4F4
+        println!("{:?}", root);
+        // 5
+        println!("{:?}", root_idx);
+        println!("stoage {:?}", tree.storage);
+
+        // assert_eq!(expected_root_hash, root);
+        // let key = Felt::from_u64(1);
+        // let value = Felt::from_u64(2);
+        let proof = tree.get_proof(root_idx, key1.clone()).unwrap().unwrap();
+        println!("{:?}", proof);
+        let mem =
+            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_1, &proof);
+        println!("{:?}", mem);
+
+        let mem =
+            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key1, value_2, &proof);
+        println!("{:?}", mem);
+
+        let key7 = felt!("0xabc").view_bits().to_owned(); // 0b01
+
+        let mem =
+            TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key7, value_2, &proof);
+        println!("{:?}", mem);
+    }
+
+    #[test]
     fn test_commitment_merkle_tree() {
         // tests/test_block_rpc.py Testing block 99708...
         // protocol_version='0.13.2'
