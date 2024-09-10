@@ -98,7 +98,7 @@ impl<H: FeltHash> TransactionOrEventTree<H> {
 
         for proof_node in proofs.iter() {
             // Hash mismatch? Return None.
-            if proof_node.hash::<PedersenHash>() != expected_hash {
+            if proof_node.hash::<H>() != expected_hash {
                 return None;
             }
             match proof_node {
@@ -240,7 +240,7 @@ mod tests {
         tree.set(key5.clone(), value_5).unwrap();
 
         let (root, root_idx) = tree.commit().unwrap();
-        // 0x06B67F08773932811D1EA6ACC6D7BF95A33818B95A09D05A15BC61AC859AF4F4
+        // 0x002B03AABA363CB9AE391FD4CFC5F7041F057FC912560F7D84915FA52E8BBE33
         println!("{:?}", root);
         // 5
         println!("{:?}", root_idx);
@@ -297,7 +297,7 @@ mod tests {
         tree.set(key4.clone(), value_4).unwrap();
 
         let (root, root_idx) = tree.commit().unwrap();
-        // 0x015B014C9A0DD567321B7E6F1CC8CA55A995D73D3A68B6B6C2663690B90B59CD
+        // 0x06B58F9C5D621E72BFCE120F8BB5B2CF0D7CD2EC0B6539C93BEE7BF0281420E9
         println!("{:?}", root);
         // 3
         println!("{:?}", root_idx);
