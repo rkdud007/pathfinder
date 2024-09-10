@@ -296,4 +296,25 @@ mod tests {
             TransactionOrEventTree::<PedersenHash>::verify_proof(root, &key7, value_2, &proof);
         println!("{:?}", mem);
     }
+
+    #[test]
+    fn test_tx_commitment_merkle_tree() {
+        let mut tree: TransactionOrEventTree<PedersenHash> = Default::default();
+
+        for (idx, hash) in [1u64, 2, 3, 4].into_iter().enumerate() {
+            let hash = Felt::from(hash);
+            let idx: u64 = idx.try_into().unwrap();
+            let key = idx.to_be_bytes().view_bits().to_owned();
+            tree.set(key, hash).unwrap();
+        }
+
+        // produced by the cairo-lang Python implementation:
+        // `hex(asyncio.run(calculate_patricia_root([1, 2, 3, 4], height=64,
+        // ffc=ffc))))`
+        let expected_root_hash =
+            felt!("0x1a0e579b6b444769e4626331230b5ae39bd880f47e703b73fa56bf77e52e461");
+        let computed_root_hash = tree.commit().unwrap().0;
+
+        assert_eq!(expected_root_hash, computed_root_hash);
+    }
 }
