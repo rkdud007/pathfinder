@@ -203,7 +203,7 @@ fn commit_and_persist<H: FeltHash, const HEIGHT: usize>(
 #[cfg(test)]
 mod tests {
     use pathfinder_common::felt;
-    use pathfinder_common::hash::PedersenHash;
+    use pathfinder_common::hash::{PedersenHash, PoseidonHash};
 
     use super::*;
 
@@ -218,7 +218,7 @@ mod tests {
         // tx_hash_hex='0x4ff941e616e9bee6bc6e6aaed4858808c025b33a8b4aa1c6cf532573e6e7bb9'
         // tx_commit_hex='0x2b03aaba363cb9ae391fd4cfc5f7041f057fc912560f7d84915fa52e8bbe33'
 
-        let mut tree: TransactionOrEventTree<PedersenHash> = Default::default();
+        let mut tree: TransactionOrEventTree<PoseidonHash> = Default::default();
 
         let key1 = 0_u64.to_be_bytes().view_bits().to_owned(); // 0b01
         let key2 = 1_u64.to_be_bytes().view_bits().to_owned(); // 0b01
@@ -277,7 +277,7 @@ mod tests {
 
         // tx_commit_hex='0x6b58f9c5d621e72bfce120f8bb5b2cf0d7cd2ec0b6539c93bee7bf0281420e9'
 
-        let mut tree: TransactionOrEventTree<PedersenHash> = Default::default();
+        let mut tree: TransactionOrEventTree<PoseidonHash> = Default::default();
 
         let key1 = 0_u64.to_be_bytes().view_bits().to_owned(); // 0b01
         let key2 = 1_u64.to_be_bytes().view_bits().to_owned(); // 0b01
