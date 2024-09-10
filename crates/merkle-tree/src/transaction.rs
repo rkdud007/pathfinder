@@ -153,6 +153,7 @@ fn commit_and_persist<H: FeltHash, const HEIGHT: usize>(
     storage: &mut StatelessStorage,
 ) -> (Felt, u64) {
     for (key, value) in &tree.leaves {
+        println!("key :{:?}, value:{:?}", key, value);
         let key = Felt::from_bits(key).unwrap();
         storage.leaves.insert(key, *value);
     }
@@ -216,15 +217,37 @@ mod tests {
         let key4 = felt!("0x3").view_bits().to_owned(); // 0b01
         let key5 = felt!("0x4").view_bits().to_owned(); // 0b01
         let key6 = felt!("0x5").view_bits().to_owned(); // 0b01
+        let key7 = felt!("0x6").view_bits().to_owned(); // 0b01
+        let key8 = felt!("0x7").view_bits().to_owned(); // 0b01
+        let key9 = felt!("0x8").view_bits().to_owned(); // 0b01
+        let key10 = felt!("0x9").view_bits().to_owned(); // 0b01
+        let key11 = felt!("0xa").view_bits().to_owned(); // 0b01
+        let key12 = felt!("0xb").view_bits().to_owned(); // 0b01
+        let key13 = felt!("0xc").view_bits().to_owned(); // 0b01
+        let key14 = felt!("0xd").view_bits().to_owned(); // 0b01
+        let key15 = felt!("0xe").view_bits().to_owned(); // 0b01
+        let key16 = felt!("0xf").view_bits().to_owned(); // 0b01
+        let key17 = felt!("0x10").view_bits().to_owned(); // 0b01
 
         // let keys = vec![key1.as_bitslice(), key2.as_bitslice()];
 
-        let value_1 = felt!("0x2");
-        let value_2 = felt!("0x3");
-        let value_3 = felt!("0x4");
-        let value_4 = felt!("0x5");
-        let value_5 = felt!("0x6");
-        let value_6 = felt!("0x7");
+        let value_1 = felt!("0x7ddafca73b3f2c36ca920b34f3536fdbe876511b9d582a1127fa0780977c257");
+        let value_2 = felt!("0x4ecbdbef65a58c90abf2d03ae9dc6c66ad4331bccd098a16f8dd6a0976152f4");
+        let value_3 = felt!("0x53222976c5360d0b9f0380f4a8b2a0f135540eb64eb021113282b4d519df2cf");
+        let value_4 = felt!("0x39c8f931e51038872c7a2650a68c388e9b6abd268ea710a950f845119e2f0bb");
+        let value_5 = felt!("0x696713c5328e75e97f2fa60fc6296c84def311b1bace7e19571efc58801efc0");
+        let value_6 = felt!("0x7553ae1155d78c96ca1bf14ff36e283ae56e1d23c4c64c61c250b5c67a3c564");
+        let value_7 = felt!("0x5f26a24b17932cc85462d1e6272d9e7bce6db27640884e64582253580a57a1a");
+        let value_8 = felt!("0xfb1f8879a89f5fed0cfa2848cf77ad940d1c9e2a5a8dd3b41075c96dee3141");
+        let value_9 = felt!("0x4ba17bc1bde8b5412ad0c3bad9ee89d9a00e373568b9097a289f045cad83b41");
+        let value_10 = felt!("0x506cd52babd14d4386c50053324777fb6245f43da25162bb99decef0e9a2ec7");
+        let value_11 = felt!("0x6f8f0dfb7dfc1f9a4ff37680cfc41d0fdc3f57bfcd0d1a88310cf44b6675ed3");
+        let value_12 = felt!("0x3d7e6dbb27dad9327640e4ae7e373186e3c01e05a24d621eb106845a68a1e");
+        let value_13 = felt!("0x62d36d3c9cc8e499276632bb9d3d428d28665243f722f3d5071c48b2c1ff3a1");
+        let value_14 = felt!("0x6c7b8f6526d8d345a39bae9d78f73168491eedb2d9c46430c831d0705e1b777");
+        let value_15 = felt!("0x79a1896bd14b45593d6d788e9c43f8fb5a8e66c07dccf85cbbb21b4b03b44da");
+        let value_16 = felt!("0x187d9280d359b6babad05ae9ae1549231c0eb8ef084ea7500b04c74aa7bf945");
+        let value_17 = felt!("0x4c9792370f39c29ca3643c80a8903b31db675cfcc86970c868652e7dd6f139b");
 
         tree.set(key1.clone(), value_1).unwrap();
         tree.set(key2.clone(), value_2).unwrap();
@@ -232,6 +255,17 @@ mod tests {
         tree.set(key4.clone(), value_4).unwrap();
         tree.set(key5.clone(), value_5).unwrap();
         tree.set(key6.clone(), value_6).unwrap();
+        tree.set(key7.clone(), value_7).unwrap();
+        tree.set(key8.clone(), value_8).unwrap();
+        tree.set(key9.clone(), value_9).unwrap();
+        tree.set(key10.clone(), value_10).unwrap();
+        tree.set(key11.clone(), value_11).unwrap();
+        tree.set(key12.clone(), value_12).unwrap();
+        tree.set(key13.clone(), value_13).unwrap();
+        tree.set(key14.clone(), value_14).unwrap();
+        tree.set(key15.clone(), value_15).unwrap();
+        tree.set(key16.clone(), value_16).unwrap();
+        tree.set(key17.clone(), value_17).unwrap();
 
         // produced by the cairo-lang Python implementation:
         // `hex(asyncio.run(calculate_patricia_root([1, 2, 3, 4], height=64,
@@ -239,6 +273,9 @@ mod tests {
         // let expected_root_hash =
         //     felt!("0x1a0e579b6b444769e4626331230b5ae39bd880f47e703b73fa56bf77e52e461");
         let (root, root_idx) = tree.commit().unwrap();
+        println!("{:?}", root);
+        println!("{:?}", root_idx);
+        println!("stoage {:?}", tree.storage);
 
         // assert_eq!(expected_root_hash, root);
         // let key = Felt::from_u64(1);
